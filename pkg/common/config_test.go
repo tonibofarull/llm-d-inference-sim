@@ -19,6 +19,7 @@ package common
 import (
 	"os"
 	"reflect"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1105,4 +1106,43 @@ var _ = Describe("admin struct tags", func() {
 		}))
 	})
 
+})
+
+var _ = Describe("KV_EVENTS_INCLUDE_VLLM_PORT environment variable", func() {
+	const testPodIP = "10.0.0.42"
+
+	BeforeEach(func() {
+		Expect(os.Unsetenv(podIPEnv)).To(Succeed())
+		Expect(os.Unsetenv(kvEventsIncludeVLLMPort)).To(Succeed())
+	})
+	AfterEach(func() {
+		Expect(os.Unsetenv(podIPEnv)).To(Succeed())
+		Expect(os.Unsetenv(kvEventsIncludeVLLMPort)).To(Succeed())
+	})
+
+	It("leaves POD_IP unchanged when KV_EVENTS_INCLUDE_VLLM_PORT is unset", func() {
+		Expect(os.Setenv(podIPEnv, testPodIP)).To(Succeed())
+		c := newConfig()
+		Expect(c.IP).To(Equal(testPodIP))
+	})
+
+	It("leaves POD_IP unchanged when KV_EVENTS_INCLUDE_VLLM_PORT is not true", func() {
+		Expect(os.Setenv(podIPEnv, testPodIP)).To(Succeed())
+		Expect(os.Setenv(kvEventsIncludeVLLMPort, "false")).To(Succeed())
+		c := newConfig()
+		Expect(c.IP).To(Equal(testPodIP))
+	})
+
+	It("appends the serving port when KV_EVENTS_INCLUDE_VLLM_PORT is true", func() {
+		Expect(os.Setenv(podIPEnv, testPodIP)).To(Succeed())
+		Expect(os.Setenv(kvEventsIncludeVLLMPort, "true")).To(Succeed())
+		c := newConfig()
+		Expect(c.IP).To(Equal(testPodIP + ":" + strconv.Itoa(vLLMDefaultPort)))
+	})
+
+	It("does not append the port when POD_IP is empty", func() {
+		Expect(os.Setenv(kvEventsIncludeVLLMPort, "true")).To(Succeed())
+		c := newConfig()
+		Expect(c.IP).To(BeEmpty())
+	})
 })

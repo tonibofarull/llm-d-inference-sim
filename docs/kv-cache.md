@@ -111,6 +111,16 @@ Example: `kv@10.0.0.1@Qwen/Qwen2.5-1.5B-Instruct`
 
 The model name used is the base model name (`--model`), not a served-model-name alias.
 
+When `KV_EVENTS_INCLUDE_VLLM_PORT=true` is set, the serving port (`--port`, default `8000`) is appended to `POD_IP`, so the topic becomes:
+
+```
+kv@<POD_IP>:<port>@<model-name>
+```
+
+Example: `kv@10.0.0.1:8000@Qwen/Qwen2.5-1.5B-Instruct`
+
+Enable this when the subscriber (for example the EPP prefix-cache scorer) addresses pods as `<Address>:<Port>`. With the plain `<ip>` topic, the block index stores the pod key as `<ip>`, which never matches the scorer's `<ip>:<port>` lookup, so cache-aware routing finds no hits. Defaults to off (see [Environment variables](configuration.md#environment-variables)).
+
 ### Message format
 
 Each message has three ZMQ frames:
@@ -294,6 +304,10 @@ env:
     valueFrom:
       fieldRef:
         fieldPath: status.podIP
+  # Optional: append the serving port to the topic so the pod key matches the
+  # EPP prefix-cache scorer's <ip>:<port> addressing. Defaults to off.
+  # - name: KV_EVENTS_INCLUDE_VLLM_PORT
+  #   value: "true"
 ```
 
 Without `POD_IP`, the simulator will fail to start when `enable-kvcache: true`.

@@ -207,3 +207,10 @@ Example of definition in yaml:
         fieldRef:
           fieldPath: status.podIP
   ```
+- `KV_EVENTS_INCLUDE_VLLM_PORT`: when `true`, appends the serving port (`--port`, default `8000`) to `POD_IP`, changing the kv-events topic from `kv@<ip>@<model>` to `kv@<ip>:<port>@<model>`. Needed when the subscriber (e.g. the EPP prefix-cache scorer) addresses pods as `<Address>:<Port>`. Defaults to off. See [KV cache](kv-cache.md#topic-format).
+Example of definition in yaml:
+  ```yaml
+  env:
+    - name: KV_EVENTS_INCLUDE_VLLM_PORT
+      value: "true"
+  ```

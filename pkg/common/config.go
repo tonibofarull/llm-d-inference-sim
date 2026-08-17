@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,7 +53,8 @@ const (
 	ChatCmplToolIDPrefix = "chatcmpl-tool-"
 	MessagesToolIDPrefix = "toolu_"
 
-	podIPEnv = "POD_IP"
+	podIPEnv                = "POD_IP"
+	kvEventsIncludeVLLMPort = "KV_EVENTS_INCLUDE_VLLM_PORT" // if "true", append the vLLM serving port to POD_IP in the kv-events topic
 
 	DefaultLatencyCalculator        = ""
 	ConstantLatencyCalculator       = "constant"
@@ -365,8 +367,12 @@ type LoraModule struct {
 }
 
 func newConfig() *Configuration {
+	ip := os.Getenv(podIPEnv)
+	if ip != "" && os.Getenv(kvEventsIncludeVLLMPort) == trueString {
+		ip += ":" + strconv.Itoa(vLLMDefaultPort)
+	}
 	return &Configuration{
-		IP:                                  os.Getenv(podIPEnv),
+		IP:                                  ip,
 		Port:                                vLLMDefaultPort,
 		MaxLoras:                            1,
 		MaxNumSeqs:                          5,

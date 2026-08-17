@@ -29,6 +29,7 @@ import (
 
 const (
 	dummy                = " "
+	trueString           = "true"
 	vllmServerDevModeEnv = "VLLM_SERVER_DEV_MODE"
 	PodNameEnv           = "POD_NAME"
 	PodNsEnv             = "POD_NAMESPACE"
@@ -83,13 +84,13 @@ func (t toggle) String() string     { return "" }
 func addToggle(f *pflag.FlagSet, ptr *bool, name, nameUsage, noNameUsage string) {
 	// Register Positive Flag
 	f.Var(toggle{ptr, true}, name, nameUsage)
-	f.Lookup(name).NoOptDefVal = "true"
+	f.Lookup(name).NoOptDefVal = trueString
 	f.Lookup(name).DefValue = "" // Hides the [=t] in help
 
 	// Register Negative Flag
 	noName := "no-" + name
 	f.Var(toggle{ptr, false}, noName, noNameUsage)
-	f.Lookup(noName).NoOptDefVal = "true"
+	f.Lookup(noName).NoOptDefVal = trueString
 	f.Lookup(noName).DefValue = "" // Hides the [=t] in help
 }
 
