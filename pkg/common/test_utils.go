@@ -28,7 +28,13 @@ import (
 const (
 	TestModelName    = "testmodel"
 	QwenModelName    = "Qwen/Qwen2-VL-2B-Instruct"
-	wildcardEndpoint = "tcp://*:*"
+	// bindEndpoint is a wildcard the SUB binds to; StartSub resolves it to a
+	// concrete local address returned to the publisher. Using 127.0.0.1 (not
+	// "*:*") keeps the resolved endpoint host-specific so the publisher dials
+	// it — matching the helper's contract that the returned endpoint is one
+	// a publisher connects to. "*:*" resolves to "[::]:<port>", which the
+	// publisher's shouldBind heuristic treats as a bind (wildcard) endpoint.
+	bindEndpoint = "tcp://127.0.0.1:0"
 )
 
 // CreateSub creates a ZMQ sub, subscribes to the provided topic, and returns the
@@ -36,7 +42,7 @@ const (
 func CreateSub(ctx context.Context, topic string) (zmq4.Socket, string) {
 	sub := NewSub(ctx)
 
-	return sub, StartSub(sub, wildcardEndpoint, topic)
+	return sub, StartSub(sub, bindEndpoint, topic)
 }
 
 func NewSub(ctx context.Context) zmq4.Socket {

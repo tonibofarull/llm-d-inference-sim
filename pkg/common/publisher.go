@@ -68,6 +68,16 @@ func EncodeSeq(seq uint64) []byte {
 }
 
 // Publisher sends events to a ZMQ endpoint.
+//
+// The bind/dial decision mirrors vLLM's ZmqEventPublisher._socket_setup:
+// https://github.com/vllm-project/vllm/blob/v0.23.0/vllm/distributed/kv_events.py#L385
+// Bind when the endpoint is "stable" (a wildcard or local transport), dial
+// otherwise
+//   - "tcp://*:5557"    -> bind (server)
+//   - "tcp://[::]:5557" -> bind
+//   - "ipc:///tmp/x"    -> bind
+//   - "inproc://x"      -> bind
+//   - "tcp://host:5557" -> dial (client)
 type Publisher struct {
 	socket   zmq4.Socket
 	endpoint string
@@ -75,10 +85,16 @@ type Publisher struct {
 }
 
 // NewPublisher creates a new ZMQ publisher.
-// endpoint is the ZMQ address to bind to (e.g., "tcp://*:5557").
-// retries is the maximum number of connection attempts.
 func NewPublisher(ctx context.Context, endpoint string) (*Publisher, error) {
-	socket := zmq4.NewPub(ctx,
+	p := &Publisher{endpoint: endpoint}
+	if err := p.socketSetup(ctx); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (p *Publisher) socketSetup(ctx context.Context) error {
+	p.socket = zmq4.NewPub(ctx,
 		// -1 means try forever
 		zmq4.WithDialerMaxRetries(-1),
 		// reconnect if server restarts
@@ -87,25 +103,39 @@ func NewPublisher(ctx context.Context, endpoint string) (*Publisher, error) {
 		zmq4.WithDialerRetry(time.Second),
 	)
 
-	// 2. Push Dial into a background goroutine
+	if shouldBind(p.endpoint) {
+		log.FromContext(ctx).Info("ZMQ publisher binding", "endpoint", p.endpoint)
+		if err := p.socket.Listen(p.endpoint); err != nil {
+			return fmt.Errorf("failed to bind ZMQ publisher: %w", err)
+		}
+		return nil
+	}
+
+	// Connect (dial). zmq4.Dial blocks until connected, so run it in the
+	// background: the socket queues sends until the connection comes up and
+	// auto-reconnects if the peer restarts.
 	go func() {
-		// wait until the listener is ready
-		err := socket.Dial(endpoint)
-		if err != nil {
+		log.FromContext(ctx).Info("ZMQ publisher dialing", "endpoint", p.endpoint)
+		if err := p.socket.Dial(p.endpoint); err != nil {
 			// Context cancellation during shutdown is expected — don't treat it as an error.
 			if ctx.Err() != nil {
 				return
 			}
-			log.FromContext(ctx).Error(err, "ZMQ dialer exited", "endpoint", endpoint)
-		} else {
-			log.FromContext(ctx).Info("ZMQ dialer connected", "endpoint", endpoint)
+			log.FromContext(ctx).Error(err, "ZMQ dialer exited", "endpoint", p.endpoint)
+			return
 		}
+		log.FromContext(ctx).Info("ZMQ dialer connected", "endpoint", p.endpoint)
 	}()
+	return nil
+}
 
-	return &Publisher{
-		socket:   socket,
-		endpoint: endpoint,
-	}, nil
+// shouldBind reports whether endpoint is "stable" and should be bound rather
+// than dialed. Mirrors vLLM's _socket_setup heuristic.
+func shouldBind(endpoint string) bool {
+	return strings.Contains(endpoint, "*") ||
+		strings.Contains(endpoint, "::") ||
+		strings.HasPrefix(endpoint, "ipc://") ||
+		strings.HasPrefix(endpoint, "inproc://")
 }
 
 // PublishEvent marshals batch, assigns the next sequence number, and sends
